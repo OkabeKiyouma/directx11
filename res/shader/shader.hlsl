@@ -26,7 +26,7 @@ VS_Output vs_main(VS_Input input)
     output.position = float4(input.pos.xy+offset,input.pos.z, 1.0f);
     output.color = input.color;
     output.uv = input.uv;
-    output.color = float4(1.0,1.0,1.0,1.0);
+    //output.color = float4(1.0,1.0,1.0,1.0);
 
     return output;
 }

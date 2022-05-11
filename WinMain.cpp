@@ -14,7 +14,8 @@
 
 #include<assert.h>
 #include <math.h> // sin, cos for rotation
-#include<thread>
+#include <thread>
+#include <mutex>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -26,48 +27,48 @@
 #include"UserWindow.h"
 #include "KKMath.h"
 
-
-static bool windowDidResize = false;
 bool isRunning = true;
-static bool isHotReloading = false;
+bool windowDidResize = false;
+
+std::mutex ResourceLock;
 
 enum KeyMap {
-    VK_KEY_NUM0  = 0x30,
-    VK_KEY_NUM1  = 0x31,
-    VK_KEY_NUM2  = 0x32,
-    VK_KEY_NUM3  = 0x33,
-    VK_KEY_NUM4  = 0x34,
-    VK_KEY_NUM5  = 0x35,
-    VK_KEY_NUM6  = 0x36,
-    VK_KEY_NUM7  = 0x37,
-    VK_KEY_NUM8  = 0x38,
-    VK_KEY_NUM9  = 0x39,
-    VK_KEY_A     = 0x41,
-    VK_KEY_B     = 0x42,
-    VK_KEY_C     = 0x43,
-    VK_KEY_D     = 0x44,
-    VK_KEY_E     = 0x45,
-    VK_KEY_F     = 0x46,
-    VK_KEY_G     = 0x47,
-    VK_KEY_H     = 0x48,
-    VK_KEY_I     = 0x49,
-    VK_KEY_J     = 0x4A,
-    VK_KEY_K     = 0x4B,
-    VK_KEY_L     = 0x4C,
-    VK_KEY_M     = 0x4D,
-    VK_KEY_N     = 0x4E,
-    VK_KEY_O     = 0x4F,
-    VK_KEY_P     = 0x50,
-    VK_KEY_Q     = 0x51,
-    VK_KEY_R     = 0x52,
-    VK_KEY_S     = 0x53,
-    VK_KEY_T     = 0x54,
-    VK_KEY_U     = 0x55,
-    VK_KEY_V     = 0x56,
-    VK_KEY_W     = 0x57,
-    VK_KEY_X     = 0x58,
-    VK_KEY_Y     = 0x59,
-    VK_KEY_Z     = 0x5A,
+    VK_KEY_NUM0 = 0x30,
+    VK_KEY_NUM1 = 0x31,
+    VK_KEY_NUM2 = 0x32,
+    VK_KEY_NUM3 = 0x33,
+    VK_KEY_NUM4 = 0x34,
+    VK_KEY_NUM5 = 0x35,
+    VK_KEY_NUM6 = 0x36,
+    VK_KEY_NUM7 = 0x37,
+    VK_KEY_NUM8 = 0x38,
+    VK_KEY_NUM9 = 0x39,
+    VK_KEY_A    = 0x41,
+    VK_KEY_B    = 0x42,
+    VK_KEY_C    = 0x43,
+    VK_KEY_D    = 0x44,
+    VK_KEY_E    = 0x45,
+    VK_KEY_F    = 0x46,
+    VK_KEY_G    = 0x47,
+    VK_KEY_H    = 0x48,
+    VK_KEY_I    = 0x49,
+    VK_KEY_J    = 0x4A,
+    VK_KEY_K    = 0x4B,
+    VK_KEY_L    = 0x4C,
+    VK_KEY_M    = 0x4D,
+    VK_KEY_N    = 0x4E,
+    VK_KEY_O    = 0x4F,
+    VK_KEY_P    = 0x50,
+    VK_KEY_Q    = 0x51,
+    VK_KEY_R    = 0x52,
+    VK_KEY_S    = 0x53,
+    VK_KEY_T    = 0x54,
+    VK_KEY_U    = 0x55,
+    VK_KEY_V    = 0x56,
+    VK_KEY_W    = 0x57,
+    VK_KEY_X    = 0x58,
+    VK_KEY_Y    = 0x59,
+    VK_KEY_Z    = 0x5A,
 };
 
 
@@ -80,7 +81,7 @@ typedef struct {
 } threadArg;
 
 //provide vertexShader pointer and Blob pointer to hold created vertexshader object and blob object
-static bool MakeVertexShader(const wchar_t* filePath, ID3D11Device1*& device ,ID3D11VertexShader*& vertexShader, ID3DBlob*& vsBlob, const char* entryPoint="vs_main") {
+static bool MakeVertexShader(const wchar_t* filePath, ID3D11Device1*& device, ID3D11VertexShader*& vertexShader, ID3DBlob*& vsBlob, const char* entryPoint = "vs_main") {
     ID3DBlob* shaderCompileErrorsBlob;
 #ifdef _DEBUG
     HRESULT hResult = D3DCompileFromFile(filePath, nullptr, nullptr, entryPoint, "vs_5_0", D3DCOMPILE_DEBUG | D3DCOMPILE_WARNINGS_ARE_ERRORS, 0, &vsBlob, &shaderCompileErrorsBlob);
@@ -99,7 +100,7 @@ static bool MakeVertexShader(const wchar_t* filePath, ID3D11Device1*& device ,ID
         MessageBoxA(0, errorString, "Shader Compiler Error", MB_ICONERROR | MB_OK);
         return false;
     }
-    
+
     hResult = device->CreateVertexShader(vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(), nullptr, &vertexShader);
     assert(SUCCEEDED(hResult));
     //vsBlob->Release();  //not released because used in input layout
@@ -107,9 +108,9 @@ static bool MakeVertexShader(const wchar_t* filePath, ID3D11Device1*& device ,ID
 }
 
 
-static bool MakePixelShader(const wchar_t* filePath, ID3D11Device1*& device, ID3D11PixelShader*& pixelShader, const char* entryPoint="ps_main") {
+static bool MakePixelShader(const wchar_t* filePath, ID3D11Device1*& device, ID3D11PixelShader*& pixelShader, const char* entryPoint = "ps_main") {
     ID3DBlob* psBlob;
-    ID3DBlob* shaderCompileErrorsBlob= NULL;
+    ID3DBlob* shaderCompileErrorsBlob = NULL;
     HRESULT hResult = D3DCompileFromFile(filePath, nullptr, nullptr, entryPoint, "ps_5_0", 0, 0, &psBlob, &shaderCompileErrorsBlob);
     if (FAILED(hResult))
     {
@@ -153,20 +154,23 @@ DWORD hasDirectoryChanged(void* thrdarg) {
 
         switch (waitState) {
         case WAIT_OBJECT_0: {
-            FILE* file=NULL;
-            _InterlockedIncrement((long*) & isHotReloading);
-            while (_wfopen_s(&file, thrdArg->filePath, L"r")!=0);
+            FILE* file = NULL;
+
+            ResourceLock.lock();
+            //_InterlockedIncrement((long*) & isHotReloading);
+            while (_wfopen_s(&file, thrdArg->filePath, L"r") != 0);
             fclose(file);
             MakeVertexShader(thrdArg->filePath, thrdArg->device, thrdArg->vertexShader, thrdArg->vsBlob);
             file = NULL;
-            while (_wfopen_s(&file, thrdArg->filePath, L"r")!=0);
+            while (_wfopen_s(&file, thrdArg->filePath, L"r") != 0);
             fclose(file);
             MakePixelShader(thrdArg->filePath, thrdArg->device, thrdArg->pixelShader);
             thrdArg->vsBlob->Release();
-            _InterlockedDecrement((long*) & isHotReloading);
+            //_InterlockedDecrement((long*) & isHotReloading);
+            ResourceLock.unlock();
             FindNextChangeNotification(fileChangeNotif);
         }
-        break;
+                          break;
         default:
             break;
         }
@@ -180,14 +184,14 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 
     UserWindow mainWin(L"Parent");
     mainWin.WindowProc = WinProc;
-    if (!mainWin.init(L"Win32 Test", 0, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT,800,800))
+    if (!mainWin.init(L"Win32 Test", 0, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 800, 800))
         return 0;
 
     ShowWindow(mainWin.Window, nCmdShow);
-    
+
     //DX11
 
-    
+
 //Device Setup and its context
     D3D_FEATURE_LEVEL featureLevels[] =
     {
@@ -206,17 +210,17 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 #endif
 
     //hResult solely stores result and nothing else
-    HRESULT hResult = D3D11CreateDevice(nullptr, 
-        D3D_DRIVER_TYPE_HARDWARE, 
-        nullptr, 
-        creationFlags, 
-        featureLevels, 
-        ARRAYSIZE(featureLevels), 
+    HRESULT hResult = D3D11CreateDevice(nullptr,
+        D3D_DRIVER_TYPE_HARDWARE,
+        nullptr,
+        creationFlags,
+        featureLevels,
+        ARRAYSIZE(featureLevels),
         D3D11_SDK_VERSION,
-        &baseDevice, 
-        nullptr, 
+        &baseDevice,
+        nullptr,
         &baseDeviceContext);
-    
+
     if (FAILED(hResult)) {
         MessageBoxA(0, "D3D11CreateDevice() failed", "Fatal Error", MB_OK);
         return GetLastError();
@@ -235,9 +239,9 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 
 
 
-//Swap chain setup
+    //Swap chain setup
 
-    //To set dxgi factory needed for swapchain
+        //To set dxgi factory needed for swapchain
     IDXGIDevice1* dxgiDevice;
     hResult = device->QueryInterface(__uuidof(IDXGIDevice1), reinterpret_cast<void**>(&dxgiDevice));
     assert(SUCCEEDED(hResult));
@@ -306,9 +310,9 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 
 
 
-//Create Framebuffer Render Target
+    //Create Framebuffer Render Target
     ID3D11RenderTargetView* frameBufferView;
-    
+
     //get a back buffer from swapchain
     ID3D11Texture2D* frameBuffer;
     hResult = swapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&frameBuffer);
@@ -318,19 +322,19 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
     hResult = device->CreateRenderTargetView(frameBuffer, 0, &frameBufferView);
     assert(SUCCEEDED(hResult));
     frameBuffer->Release();
-    
-//Create shaders
 
-    //Vertex Shader
+    //Create shaders
+
+        //Vertex Shader
     ID3DBlob* vsBlob;
     ID3D11VertexShader* vertexShader;
-    MakeVertexShader(L"res/shader/shader.hlsl",device, vertexShader, vsBlob);
+    MakeVertexShader(L"res/shader/shader.hlsl", device, vertexShader, vsBlob);
 
     //Pixel Shader
     ID3D11PixelShader* pixelShader;
     MakePixelShader(L"res/shader/shader.hlsl", device, pixelShader);
 
-// Create Input Layout
+    // Create Input Layout
     ID3D11InputLayout* inputLayout;
     {
         D3D11_INPUT_ELEMENT_DESC inputElementDesc[] =
@@ -346,18 +350,18 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
     }
 
 
-// Create Vertex Buffer
+    // Create Vertex Buffer
     ID3D11Buffer* vertexBuffer;
     UINT numVerts;
     UINT stride;
     UINT offset;
     {
-        float vertexData[] = { 
-           //  x,       y,     z,     r,     g,     b,     a,     u,     v
-           -0.5f,   -0.5f,   0.f,   0.f,   0.f,   1.f,   1.f,   0.f,   1.f, 
-           -0.5f,    0.5f,   0.f,   0.f,   1.f,   0.f,   1.f,   0.f,   0.f,
-            0.5f,   -0.5f,   0.f,   1.f,   0.f,   0.f,   1.f,   1.f,   1.f,
-            0.5f,    0.5f,   0.f,   0.f,   0.f,   1.f,   1.f,   1.f,   0.f, 
+        float vertexData[] = {
+            //  x,       y,     z,     r,     g,     b,     a,     u,     v
+            -0.5f,   -0.5f,   0.f,   0.f,   0.f,   1.f,   1.f,   0.f,   1.f,
+            -0.5f,    0.5f,   0.f,   0.f,   1.f,   0.f,   1.f,   0.f,   0.f,
+             0.5f,   -0.5f,   0.f,   1.f,   0.f,   0.f,   1.f,   1.f,   1.f,
+             0.5f,    0.5f,   0.f,   0.f,   0.f,   1.f,   1.f,   1.f,   0.f,
         };
 
         stride = 9 * sizeof(float);
@@ -375,7 +379,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
         assert(SUCCEEDED(hResult));
     }
 
-//Create Index Buffer
+    //Create Index Buffer
     ID3D11Buffer* indexBuffer;
     {
         UINT index[] = {
@@ -394,7 +398,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
         assert(SUCCEEDED(hResult));
     }
 
-//Set Constant Buffer
+    //Set Constant Buffer
     struct Constants
     {
         Vec2 pos;
@@ -413,7 +417,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
         assert(SUCCEEDED(hResult));
     }
 
-//Set Sampler State
+    //Set Sampler State
     D3D11_SAMPLER_DESC samplerDesc = {};
     samplerDesc.Filter         = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
     samplerDesc.AddressU       = D3D11_TEXTURE_ADDRESS_BORDER; //clamp,wrap,mirror,etc
@@ -428,14 +432,14 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
     ID3D11SamplerState* samplerState;
     device->CreateSamplerState(&samplerDesc, &samplerState);
 
-//Load Image
+    //Load Image
     int texWidth, texHeight, texNumChannels;
     int texForceNumChannels = 4;
     unsigned char* testTextureBytes = stbi_load("res/images/awesomeface.png", &texWidth, &texHeight, &texNumChannels, texForceNumChannels);
     assert(testTextureBytes);
     int texBytesPerRow = 4 * texWidth;
 
-//Create Texture
+    //Create Texture
     D3D11_TEXTURE2D_DESC textureDesc = {};
     textureDesc.Width            = texWidth;
     textureDesc.Height           = texHeight;
@@ -458,9 +462,9 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 
     free(testTextureBytes);
 
-//Set up Rasterizer 
-    
-    //Set Rasterizer State
+    //Set up Rasterizer 
+
+        //Set Rasterizer State
     ID3D11RasterizerState1* rasterizerState;
     {
         CD3D11_RASTERIZER_DESC1 rasterizerDesc = {};
@@ -476,12 +480,12 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
         rasterizerDesc.AntialiasedLineEnable = FALSE; //alphaline anti-aliasing
         rasterizerDesc.MultisampleEnable     = TRUE; //quadrilateral line anti-aliasing
         rasterizerDesc.ForcedSampleCount     = 0;
-        
+
         HRESULT hResult = device->CreateRasterizerState1(&rasterizerDesc, &rasterizerState);
         assert(SUCCEEDED(hResult));
     }
 
-//Set Blend Function
+    //Set Blend Function
     ID3D11BlendState1* blendState = nullptr;
     {
         D3D11_BLEND_DESC1 blendFunctionDesc = {};
@@ -492,14 +496,14 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
         device->CreateBlendState1(&blendFunctionDesc, &blendState);
     }
 
-    deviceContext->OMSetBlendState( blendState, NULL, 0xffffffff);
+    deviceContext->OMSetBlendState(blendState, NULL, 0xffffffff);
 
 
     threadArg thrdArg = { L"res/shader/shader.hlsl",device, vertexShader, vsBlob, pixelShader };
 
     HANDLE waitThread = CreateThread(NULL, 0, hasDirectoryChanged, (void*)&thrdArg, 0, NULL);
 
-    
+
     //Main Loop
     while (isRunning)
     {
@@ -531,11 +535,11 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
             windowDidResize = false;
         }
 
- 
+
         D3D11_MAPPED_SUBRESOURCE mappedSubresource;
         deviceContext->Map(constantBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedSubresource);
         Constants* constants = (Constants*)(mappedSubresource.pData);
-        constants->pos   = { 0.5f, 0.3f };
+        constants->pos = { 0.5f, 0.3f };
         deviceContext->Unmap(constantBuffer, 0);
 
         float backgroundColor[4] = { 0.1f, 0.2f, 0.6f, 1.0f };
@@ -547,12 +551,13 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
         deviceContext->RSSetViewports(1, &viewport);
 
         //Set up Scissor Rectangle
-        D3D11_RECT scissorRect = {(LONG)(viewport.TopLeftY),(LONG)(viewport.TopLeftX),(LONG)(viewport.TopLeftY+viewport.Width),(LONG)(viewport.TopLeftX+viewport.Height)};
+        D3D11_RECT scissorRect = { (LONG)(viewport.TopLeftY),(LONG)(viewport.TopLeftX),(LONG)(viewport.TopLeftY + viewport.Width),(LONG)(viewport.TopLeftX + viewport.Height) };
         deviceContext->RSSetScissorRects(1, &scissorRect);
 
         deviceContext->OMSetRenderTargets(1, &frameBufferView, nullptr);
 
-        while (isHotReloading) {}
+        ResourceLock.lock();
+
         deviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         deviceContext->IASetInputLayout(inputLayout);
         deviceContext->IASetVertexBuffers(0, 1, &vertexBuffer, &stride, &offset);
@@ -570,6 +575,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
         deviceContext->DrawIndexed(6, 0, 0);
 
         swapChain->Present(1, 0);
+
+        ResourceLock.unlock();
     }
     return 0;
 }
@@ -603,17 +610,17 @@ LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
         // Else: User canceled. Do nothing.
         return 0;
 
-    //case WM_PAINT:
-    //{
-    //    PAINTSTRUCT ps;
-    //    HDC hdc = BeginPaint(hwnd, &ps);
+        //case WM_PAINT:
+        //{
+        //    PAINTSTRUCT ps;
+        //    HDC hdc = BeginPaint(hwnd, &ps);
 
 
 
-    //    FillRect(hdc, &ps.rcPaint, (HBRUSH)(COLOR_WINDOW + 1));
+        //    FillRect(hdc, &ps.rcPaint, (HBRUSH)(COLOR_WINDOW + 1));
 
-    //    EndPaint(hwnd, &ps);
-    //}
+        //    EndPaint(hwnd, &ps);
+        //}
     case WM_SIZE:
     {
         windowDidResize = true;
